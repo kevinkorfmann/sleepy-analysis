@@ -1,0 +1,8 @@
+./rerun
+./sweep
+./timefixation
+./tmrca
+./lds
+lds*
+./omegaplus-files
+./recovery_sweep
