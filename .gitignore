@@ -6,3 +6,4 @@
 lds*
 ./omegaplus-files
 ./recovery_sweep
+__pycache__
