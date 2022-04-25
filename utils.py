@@ -148,13 +148,79 @@ def sleepy(
 
 
     
+def get_tmrca(directory, model_name, hue=None):
+    csvs = get_path_trees_recorders(directory)[0]
+    tmrcas = []
+    for file in csvs:
+        ts = tskit.load(file)
+        tmrca = ts.max_root_time
+        has_single_root = True
+        for tree in ts.trees():
+            if not tree.has_single_root:
+                has_single_root = False
+        if has_single_root:
+            tmrcas.append(tmrca)
+    if hue:
+        tmrcas = pd.DataFrame([tmrcas, [model_name]*len(tmrcas), [hue]*len(tmrcas)]).T
+        tmrcas.columns = ["tmrca", "model", "recomb."]    
+    else:
+        tmrcas = pd.DataFrame([tmrcas, [model_name]*len(tmrcas)]).T
+        tmrcas.columns = ["tmrca", "model"]
+    return tmrcas
+    
+    
+def norm(model):
+    norm_factor = (model[model.positions < 1000].value.mean() + model[model.positions > 9000].value.mean()) / 2
+    model.value = model.value / norm_factor
+    return model
+
+def get_diversity(directory ,model, span_normalise=True, use=None, mode="branch", mutate=False, mu=5e-5, max_trees=None):
+    trees_path, _ = get_path_trees_recorders(directory)[:max_trees]
+    diversities = []
+    
+   
+    for i in range(len(trees_path[:max_trees])):
+        ts = tskit.load(trees_path[i])
+        if mutate:
+            ts = msprime.sim_mutations(ts, mu,discrete_genome=True, keep=False)
+        windows = np.linspace(0, ts.sequence_length, 200)
+        diversity = ts.diversity(windows=windows, span_normalise=span_normalise,   mode=mode )
+        diversities.append(diversity)
+    diversities = pd.DataFrame(diversities).fillna(0)
+    diversities = diversities.T
+    diversities['positions'] = windows[:-1]
+    diversities = diversities.melt("positions")
+    diversities['model'] = model
+    return diversities
+
+def subfig_diversity(models, ax, y_label=False, font_scale=1.8, legend_pos=-0.05, p=None):
+    diversity_frame = pd.concat(models)
+    sns.lineplot(data=diversity_frame, x="positions", y="value",linewidth=1.4, hue="model", ax=ax, palette=p)
+    if y_label: ax.set(xlabel='positions', ylabel='genetic diversity\n (tajima\'s pi)')
+    else: ax.set(xlabel='positions', ylabel='')
+        
+        
+    #ax.legend(loc='lower right')
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0 + box.height * 0.1,
+                     box.width, box.height * 0.9])
+
+    # Put a legend below current axis
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, legend_pos),
+              fancybox=True, shadow=True, ncol=3)
+    ax.set_ylabel("genetic diversity\n(tajima's pi)")
+    
+    #ax.grid(alpha=0.5)
+    
+
+    
 
 
-
-def subfig_diversity(models, ax, y_label=False, font_scale=0.8, legend_pos=-0.05):
+"""
+def subfig_diversity(models, ax, y_label=False, font_scale=0.8, legend_pos=-0.05, p=None):
     diversity_frame = pd.concat(models)
     sns.set(style= "white",palette="colorblind", font_scale=font_scale)  
-    sns.lineplot(data=diversity_frame, x="positions", y="value", hue="model", ax=ax)
+    sns.lineplot(data=diversity_frame, x="positions", y="value", hue="model", ax=ax, cmap=p)
     if y_label: ax.set(xlabel='positions', ylabel='genetic diversity\n (tajima\'s pi)')
     else: ax.set(xlabel='positions', ylabel='')
         
@@ -171,8 +237,8 @@ def subfig_diversity(models, ax, y_label=False, font_scale=0.8, legend_pos=-0.05
     ax.grid(alpha=0.5)
     
 
-def get_diversity(directory ,model, span_normalise=True, use=None, mode="branch", mutate=False, mu=5e-5):
-    trees_path, _ = get_path_trees_recorders(directory)
+def get_diversity(directory ,model, span_normalise=True, use=None, mode="branch", mutate=False, mu=5e-5, max_trees=None):
+    trees_path, _ = get_path_trees_recorders(directory)[:max_trees]
     diversities = []
     
     for i in range(len(trees_path)):
@@ -188,6 +254,7 @@ def get_diversity(directory ,model, span_normalise=True, use=None, mode="branch"
     diversities = diversities.melt("positions")
     diversities['model'] = model
     return diversities
+"""
 
 def get_path_trees_recorders(directory):
     files = np.array(os.listdir(directory))
@@ -250,7 +317,7 @@ def get_num_mutations(directory, model_name):
 
 """
 
-"""
+
 
 ###
 
@@ -313,7 +380,7 @@ def get_time_fixation_table(file, b, c):
     df.rename({0: "fixation time"}, axis=1, inplace=True)
     return df
 
-"""
+
 
 ###
 
